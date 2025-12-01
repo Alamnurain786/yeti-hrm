@@ -9,7 +9,8 @@ const AddRoleForm = ({ showModal, setShowModal }) => {
 
   const [formData, setFormData] = useState({
     title: "",
-    department: "",
+    department: "", // department name for display
+    departmentId: "", // department ID for backend
     description: "",
     level: "Junior",
     minSalary: "",
@@ -17,7 +18,21 @@ const AddRoleForm = ({ showModal, setShowModal }) => {
   });
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    // If department is changed, also update departmentId
+    if (name === "department") {
+      const selectedDept = departments.find(
+        (dept) => (dept.name || dept) === value
+      );
+      setFormData({
+        ...formData,
+        department: value,
+        departmentId: selectedDept?.id || "",
+      });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = (e) => {
@@ -27,6 +42,7 @@ const AddRoleForm = ({ showModal, setShowModal }) => {
     setFormData({
       title: "",
       department: "",
+      departmentId: "",
       description: "",
       level: "Junior",
       minSalary: "",
