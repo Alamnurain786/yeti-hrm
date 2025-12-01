@@ -12,7 +12,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 import NepaliDate from "nepali-date-converter";
 import NepaliDatePicker from "../components/NepaliDatePicker";
 

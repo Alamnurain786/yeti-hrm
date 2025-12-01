@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Plus, Search, Briefcase, TrendingUp } from "lucide-react";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 import AddRoleForm from "../components/AddRoleForm";
 
 const Roles = () => {
-  const { roles } = useMockData();
+  // const { roles } = useMockData();
+  const roles = []; // TODO: Fetch from backend API
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 

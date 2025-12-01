@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Search, Building2, Users, Pencil, Trash2 } from "lucide-react";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 import { useToast } from "../context/ToastContext";
 
 const Departments = () => {

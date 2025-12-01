@@ -9,7 +9,7 @@ import {
   ClockAlert,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 
 const AttendanceManagement = () => {
   const { user } = useAuth();

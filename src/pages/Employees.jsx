@@ -9,12 +9,13 @@ import {
   ToggleLeft,
   UserX,
 } from "lucide-react";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 import { useToast } from "../context/ToastContext";
 import AddEmployeeForm from "../components/AddEmployeeForm";
 
 const Employees = () => {
-  const { users, updateUserProfile } = useMockData();
+  // const { users, updateUserProfile } = useMockData();
+  const users = []; // TODO: Fetch from backend API
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);

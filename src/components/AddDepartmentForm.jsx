@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Save } from "lucide-react";
-import { useMockData } from "../context/MockData";
+// import { useMockData } from "../context/MockData";
 import { useToast } from "../context/ToastContext";
 
 const AddDepartmentForm = ({ showModal, setShowModal }) => {
