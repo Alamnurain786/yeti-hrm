@@ -217,3 +217,34 @@ class DashboardConfigResponse(DashboardConfigBase):
     
     class Config:
         from_attributes = True
+
+
+# ============= Role Schemas =============
+class RoleBase(BaseModel):
+    title: str
+    department_id: str
+    level: str
+    min_salary: float
+    max_salary: float
+    description: Optional[str] = None
+
+
+class RoleCreate(RoleBase):
+    pass
+
+
+class RoleUpdate(BaseModel):
+    title: Optional[str] = None
+    department_id: Optional[str] = None
+    level: Optional[str] = None
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
+    description: Optional[str] = None
+
+
+class RoleResponse(RoleBase):
+    id: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

@@ -4,7 +4,7 @@
 import sys
 from datetime import date, datetime, timedelta
 from app.config.database import SessionLocal, create_tables
-from app.models.models import User, Department, Attendance, Leave
+from app.models.models import User, Department, Attendance, Leave, Role
 from app.utils.auth import get_password_hash
 
 
@@ -169,3 +169,4 @@ def seed_database():
 
 if __name__ == "__main__":
     seed_database()
+

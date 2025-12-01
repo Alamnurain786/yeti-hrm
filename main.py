@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config.settings import settings
 from app.config.database import create_tables
-from app.routes import auth, users, attendance, leaves, departments
+from app.routes import auth, users, attendance, leaves, departments, roles
 
 # Create FastAPI app
 app = FastAPI(
@@ -31,6 +31,7 @@ app.include_router(users.router, prefix=settings.API_PREFIX)
 app.include_router(attendance.router, prefix=settings.API_PREFIX)
 app.include_router(leaves.router, prefix=settings.API_PREFIX)
 app.include_router(departments.router, prefix=settings.API_PREFIX)
+app.include_router(roles.router, prefix=settings.API_PREFIX)
 
 
 @app.on_event("startup")
@@ -65,3 +66,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
