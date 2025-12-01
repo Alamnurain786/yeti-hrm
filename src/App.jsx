@@ -15,11 +15,11 @@ import LeaveApprovals from "./pages/LeaveApprovals";
 import LeaveManagement from "./pages/LeaveManagement";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { useMockData } from "./context/MockData";
 
 function App() {
-  const { loading } = useMockData();
+  const { loading } = useAuth();
 
   if (loading) {
     return <LoadingSpinner />;
