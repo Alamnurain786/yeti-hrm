@@ -1,3 +1,5 @@
+import React, { useState } from "react";
+
 /**
  * Utility function to mask sensitive data for privacy
  * @param {string} value - The value to mask
@@ -69,8 +71,7 @@ export const MaskedInput = ({
   onChange,
   ...props
 }) => {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [originalValue] = React.useState(value);
+  const [isEditing, setIsEditing] = useState(false);
 
   const displayValue =
     isEditing || showUnmasked ? value : maskSensitiveData(value, type);

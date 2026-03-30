@@ -1,19 +1,18 @@
 import { useEffect } from "react";
 
-export const useUnsavedChanges = (hasUnsavedChanges) => {
+export const useUnsavedChanges = (hasUnsavedChanges, onWarnUnsavedChanges) => {
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
       if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = "";
-        return "";
+        onWarnUnsavedChanges?.();
       }
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, onWarnUnsavedChanges]);
 };

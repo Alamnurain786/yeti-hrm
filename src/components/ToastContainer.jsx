@@ -31,10 +31,17 @@ const typeStyles = {
 const ToastContainer = () => {
   const { toasts, removeToast } = useToast();
 
+  const handleActionClick = (toastId, action) => {
+    if (typeof action?.onClick === "function") {
+      action.onClick();
+    }
+    removeToast(toastId);
+  };
+
   if (!toasts || toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[100] space-y-3 w-[320px]">
+    <div className="fixed top-4 left-3 right-3 sm:left-auto sm:right-4 z-[100] space-y-3 w-auto sm:w-[320px]">
       {toasts.map((t) => {
         const style = typeStyles[t.type] ?? typeStyles.default;
         return (
@@ -46,6 +53,24 @@ const ToastContainer = () => {
             <div className="flex-1">
               <p className={`text-sm font-semibold ${style.text}`}>{t.title}</p>
               <p className="text-sm text-slate-600 mt-1">{t.message}</p>
+              {Array.isArray(t.actions) && t.actions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {t.actions.map((action, index) => (
+                    <button
+                      key={`${t.id}_action_${index}`}
+                      type="button"
+                      onClick={() => handleActionClick(t.id, action)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        action?.variant === "danger"
+                          ? "bg-red-600 text-white hover:bg-red-700"
+                          : "bg-white/80 text-slate-700 border border-slate-200 hover:bg-white"
+                      }`}
+                    >
+                      {action?.label || "Action"}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               onClick={() => removeToast(t.id)}

@@ -1,10 +1,10 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
   useCallback,
   useState,
   useRef,
-  useEffect,
 } from "react";
 
 const ToastContext = createContext();
@@ -26,18 +26,27 @@ export const ToastProvider = ({ children }) => {
         (type === "success"
           ? "Success"
           : type === "error"
-          ? "Error"
-          : type === "info"
-          ? "Info"
-          : "Notice");
+            ? "Error"
+            : type === "info"
+              ? "Info"
+              : "Notice");
 
-      const toast = { id, type, message, title, duration };
+      const toast = {
+        id,
+        type,
+        message,
+        title,
+        duration,
+        actions: Array.isArray(options.actions) ? options.actions : [],
+      };
       setToasts((prev) => [...prev, toast]);
 
       // auto dismiss
-      setTimeout(() => removeToast(id), duration);
+      if (duration > 0) {
+        setTimeout(() => removeToast(id), duration);
+      }
     },
-    [removeToast]
+    [removeToast],
   );
 
   const value = { toasts, showToast, removeToast };

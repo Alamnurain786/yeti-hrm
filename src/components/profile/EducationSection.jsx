@@ -8,7 +8,7 @@ const EducationSection = memo(
     removeEducation,
     updateEducation,
     handleEducationDocUpload,
-    errors,
+    errors = {},
   }) => {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
@@ -60,8 +60,8 @@ const EducationSection = memo(
                       }
                       className={`w-full px-3 py-2 rounded-xl border text-sm ${
                         errors[`education.${index}.degree`]
-                          ? "border-red-300"
-                          : "border-slate-200"
+                          ? "border-red-300 bg-red-50 focus:border-red-500"
+                          : "border-slate-200 focus:border-blue-500"
                       }`}
                       placeholder="e.g., Bachelor, Master"
                     />
@@ -83,8 +83,8 @@ const EducationSection = memo(
                       }
                       className={`w-full px-3 py-2 rounded-xl border text-sm ${
                         errors[`education.${index}.institute`]
-                          ? "border-red-300"
-                          : "border-slate-200"
+                          ? "border-red-300 bg-red-50 focus:border-red-500"
+                          : "border-slate-200 focus:border-blue-500"
                       }`}
                       placeholder="Institute name"
                     />
@@ -104,20 +104,35 @@ const EducationSection = memo(
                       onChange={(e) =>
                         updateEducation(index, "year", e.target.value)
                       }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                      className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                        errors[`education.${index}.year`]
+                          ? "border-red-300 bg-red-50 focus:border-red-500"
+                          : "border-slate-200 focus:border-blue-500"
+                      }`}
                       placeholder="YYYY"
                     />
+                    {errors[`education.${index}.year`] && (
+                      <p className="text-xs text-red-600 mt-1">
+                        {errors[`education.${index}.year`]}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <label className="flex items-center px-4 py-2 rounded-xl border border-slate-200 text-slate-700 cursor-pointer hover:bg-slate-50 text-sm">
+                  <label
+                    className={`flex items-center px-4 py-2 rounded-xl border text-slate-700 cursor-pointer hover:bg-slate-50 text-sm ${
+                      errors[`education.${index}.document`]
+                        ? "border-red-300 bg-red-50"
+                        : "border-slate-200"
+                    }`}
+                  >
                     <FileText size={16} className="mr-2" />
                     {edu.document
                       ? "Document Uploaded ✓"
                       : "Upload Certificate"}
                     <input
                       type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
+                      accept=".jpg,.jpeg,.pdf"
                       className="hidden"
                       onChange={(e) => handleEducationDocUpload(index, e)}
                     />
@@ -128,13 +143,18 @@ const EducationSection = memo(
                     </span>
                   )}
                 </div>
+                {errors[`education.${index}.document`] && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {errors[`education.${index}.document`]}
+                  </p>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
     );
-  }
+  },
 );
 
 EducationSection.displayName = "EducationSection";

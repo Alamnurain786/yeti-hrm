@@ -5,14 +5,17 @@ import App from "./App.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import ToastContainer from "./components/ToastContainer.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { PlatformSettingsProvider } from "./context/PlatformSettingsContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <AuthProvider>
-      <ToastProvider>
-        <App />
-        <ToastContainer />
-      </ToastProvider>
+      <PlatformSettingsProvider>
+        <ToastProvider>
+          <App />
+          <ToastContainer />
+        </ToastProvider>
+      </PlatformSettingsProvider>
     </AuthProvider>
-  </StrictMode>
+  </StrictMode>,
 );

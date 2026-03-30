@@ -58,81 +58,82 @@ const FamilyDetailsSection = memo(
                   </td>
                 </tr>
               ) : (
-                familyMembers.map((member, index) => (
-                  <tr key={index} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        value={member.relationship}
-                        onChange={(e) =>
-                          updateFamilyMember(
-                            index,
-                            "relationship",
-                            e.target.value
-                          )
-                        }
-                        className={`w-full px-2 py-1 rounded border text-sm ${
-                          errors[`familyMember.${index}.relationship`]
-                            ? "border-red-300"
-                            : "border-slate-200"
-                        }`}
-                        placeholder="e.g., Spouse, Father"
-                      />
-                      {errors[`familyMember.${index}.relationship`] && (
-                        <p className="text-xs text-red-600 mt-0.5">
-                          {errors[`familyMember.${index}.relationship`]}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        value={member.name}
-                        onChange={(e) =>
-                          updateFamilyMember(index, "name", e.target.value)
-                        }
-                        className={`w-full px-2 py-1 rounded border text-sm ${
-                          errors[`familyMember.${index}.name`]
-                            ? "border-red-300"
-                            : "border-slate-200"
-                        }`}
-                        placeholder="Full name"
-                      />
-                      {errors[`familyMember.${index}.name`] && (
-                        <p className="text-xs text-red-600 mt-0.5">
-                          {errors[`familyMember.${index}.name`]}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        value={member.remarks}
-                        onChange={(e) =>
-                          updateFamilyMember(index, "remarks", e.target.value)
-                        }
-                        className="w-full px-2 py-1 rounded border border-slate-200 text-sm"
-                        placeholder="Optional"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => removeFamilyMember(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                familyMembers.map((member, index) => {
+                  const relationshipError =
+                    errors[`familyMember.${index}.relationship`] ||
+                    errors[`familyMembers.${index}.relationship`];
+                  const nameError =
+                    errors[`familyMember.${index}.name`] ||
+                    errors[`familyMembers.${index}.name`];
+
+                  return (
+                    <tr key={index} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {index + 1}
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                          value={member.relationship}
+                          onChange={(e) =>
+                            updateFamilyMember(
+                              index,
+                              "relationship",
+                              e.target.value,
+                            )
+                          }
+                          className={`w-full px-2 py-1 rounded border text-sm ${relationshipError ? "border-red-300" : "border-slate-200"}`}
+                          placeholder="e.g., Spouse, Father"
+                        />
+                        {relationshipError && (
+                          <p className="text-xs text-red-600 mt-0.5">
+                            {relationshipError}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                          value={member.name}
+                          onChange={(e) =>
+                            updateFamilyMember(index, "name", e.target.value)
+                          }
+                          className={`w-full px-2 py-1 rounded border text-sm ${nameError ? "border-red-300" : "border-slate-200"}`}
+                          placeholder="Full name"
+                        />
+                        {nameError && (
+                          <p className="text-xs text-red-600 mt-0.5">
+                            {nameError}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                          value={member.remarks}
+                          onChange={(e) =>
+                            updateFamilyMember(index, "remarks", e.target.value)
+                          }
+                          className="w-full px-2 py-1 rounded border border-slate-200 text-sm"
+                          placeholder="Optional"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => removeFamilyMember(index)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
     );
-  }
+  },
 );
 
 FamilyDetailsSection.displayName = "FamilyDetailsSection";

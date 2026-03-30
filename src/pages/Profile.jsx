@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-// import { useMockData } from "../context/MockData";
 import {
   Save,
   Clock,
@@ -20,107 +20,230 @@ import ProfileProgress from "../components/ProfileProgress";
 import SuccessAnimation from "../components/SuccessAnimation";
 import ProfileCompletenessBadge from "../components/ProfileCompletenessBadge";
 import DocumentPreviewModal from "../components/DocumentPreviewModal";
-import { useDebounce } from "../hooks/useDebounce";
 import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useAutoSave } from "../hooks/useAutoSave";
-import { useProfileForm } from "../hooks/useProfileForm";
-import { useValidation } from "../hooks/useValidation";
-import { useFamilyMembers } from "../hooks/useFamilyMembers";
-import { useEducation } from "../hooks/useEducation";
 import { exportProfileToPDF } from "../utils/pdfExport";
+import {
+  getApiErrorMessage,
+  getApiValidationErrors,
+  profileAPI,
+  profileFileAPI,
+  userAPI,
+} from "../services/backendApi";
+import NepaliDate from "nepali-date-converter";
 
-const Profile = () => {
-  const { user } = useAuth();
-  const { updateUserProfile } = useMockData();
-  const { showToast } = useToast();
+const emptyIdentification = {
+  accountHolderNameNepali: "",
+  citizenshipNo: "",
+  citizenshipIssueDate: "",
+  citizenshipIssueDateBS: "",
+  citizenshipIssuePlace: "",
+  citizenshipDocument: "",
+  nationalIdCardNo: "",
+  nationalIdCardIssueDate: "",
+  nationalIdCardIssueDateBS: "",
+  nationalIdCardIssuePlace: "",
+  nationalIdCardDocument: "",
+  drivingLicenseNo: "",
+  drivingLicenseIssueDate: "",
+  drivingLicenseIssueDateBS: "",
+  drivingLicenseIssuingAuthority: "",
+  drivingLicenseDocument: "",
+  panNo: "",
+  panDocument: "",
+};
 
-  const [form, setForm] = useState({
-    profileImage: user?.profileImage || "",
-    // Non-editable HR fields shown read-only
+const emptyAddress = {
+  houseNo: "",
+  wardNo: "",
+  street: "",
+  municipality: "",
+  district: "",
+  mobile: "",
+  email: "",
+};
+
+const isDataUri = (value) =>
+  typeof value === "string" && value.trim().toLowerCase().startsWith("data:");
+const isBlobUrl = (value) =>
+  typeof value === "string" && value.trim().toLowerCase().startsWith("blob:");
+
+const sanitizeDocumentValue = (value) => (isDataUri(value) ? "" : value || "");
+const sanitizeProfileImageValue = (value) =>
+  isDataUri(value) || isBlobUrl(value) ? "" : value || "";
+const isHttpUrl = (value) =>
+  typeof value === "string" && /^https?:\/\//i.test(value.trim());
+
+const resolveProfileImageForSave = (formValue, userValue) => {
+  const formSanitized = sanitizeProfileImageValue(formValue);
+  if (formSanitized) return formSanitized;
+  const userSanitized = sanitizeProfileImageValue(userValue);
+  return userSanitized || "";
+};
+
+const toPreviewImageSrc = (value) => {
+  const sanitized = sanitizeProfileImageValue(value);
+  if (!sanitized) return "";
+  return isHttpUrl(sanitized) ? sanitized : "";
+};
+
+const toAdDateFromBs = (bsValue) => {
+  if (!bsValue || typeof bsValue !== "string") return "";
+  const parts = bsValue.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return "";
+
+  try {
+    const [year, month, day] = parts;
+    const nepaliDate = new NepaliDate(year, month - 1, day);
+    return nepaliDate.toJsDate().toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
+const toAgeFromAd = (adValue) => {
+  if (!adValue || typeof adValue !== "string") return "";
+  const adDate = new Date(adValue);
+  if (Number.isNaN(adDate.getTime())) return "";
+
+  const today = new Date();
+  let age = today.getFullYear() - adDate.getFullYear();
+  const monthDiff = today.getMonth() - adDate.getMonth();
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < adDate.getDate())
+  ) {
+    age--;
+  }
+  return age >= 0 ? String(age) : "";
+};
+
+const sanitizeProfileData = (data = {}) => {
+  const identification = data.identification || {};
+  const education = Array.isArray(data.education) ? data.education : [];
+
+  return {
+    ...data,
+    profileImage: sanitizeProfileImageValue(data.profileImage),
+    identification: {
+      ...identification,
+      citizenshipDocument: sanitizeDocumentValue(
+        identification.citizenshipDocument,
+      ),
+      nationalIdCardDocument: sanitizeDocumentValue(
+        identification.nationalIdCardDocument,
+      ),
+      drivingLicenseDocument: sanitizeDocumentValue(
+        identification.drivingLicenseDocument,
+      ),
+      panDocument: sanitizeDocumentValue(identification.panDocument),
+    },
+    education: education.map((item) => ({
+      ...item,
+      document: sanitizeDocumentValue(item.document),
+    })),
+  };
+};
+
+const ALLOWED_PROFILE_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+];
+const ALLOWED_DOC_MIME_TYPES = ["image/jpeg", "image/jpg", "application/pdf"];
+const UNSAVED_TOAST_COOLDOWN_MS = 8000;
+const PROFILE_REVIEW_PENDING_REASON = "Profile update submitted for review";
+const MOBILE_REGEX = /^\d{10}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const buildInitialForm = (user, profileData = null) => {
+  const sanitized = sanitizeProfileData(profileData || {});
+  const joiningDateBS = sanitized?.joiningDateBS || user?.joiningDateBS || "";
+  const dateOfBirth = sanitized?.dateOfBirth || user?.dateOfBirth || "";
+  const derivedJoiningDate = toAdDateFromBs(joiningDateBS);
+  const derivedAge = toAgeFromAd(dateOfBirth);
+
+  return {
+    profileImage: toPreviewImageSrc(
+      sanitized?.profileImage || user?.profileImage,
+    ),
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
-    role: user?.role || "",
-    department: user?.department || "",
-    manager: user?.manager || "",
-    joiningDate: user?.joiningDate || "",
-    joiningDateBS: user?.joiningDateBS || "",
-    dateOfBirth: user?.dateOfBirth || "",
-    dobBS: user?.dobBS || "",
-    gender: user?.gender || "",
-    age: user?.age || "",
-    religion: user?.religion || "",
-    nationality: user?.nationality || "",
-    // Identification Details
-    identification: user?.identification || {
-      accountHolderNameNepali: "",
-      citizenshipNo: "",
-      citizenshipIssueDate: "",
-      citizenshipIssueDateBS: "",
-      citizenshipIssuePlace: "",
-      citizenshipDocument: "",
-      nationalIdCardNo: "",
-      nationalIdCardIssueDate: "",
-      nationalIdCardIssueDateBS: "",
-      nationalIdCardIssuePlace: "",
-      nationalIdCardDocument: "",
-      drivingLicenseNo: "",
-      drivingLicenseIssueDate: "",
-      drivingLicenseIssueDateBS: "",
-      drivingLicenseIssuingAuthority: "",
-      drivingLicenseDocument: "",
-      panNo: "",
-      panDocument: "",
+    role: sanitized?.role || user?.role || "",
+    department: sanitized?.department || user?.department || "",
+    manager: sanitized?.manager || user?.manager || "",
+    joiningDate:
+      sanitized?.joiningDate || user?.joiningDate || derivedJoiningDate,
+    joiningDateBS,
+    dateOfBirth,
+    dobBS: sanitized?.dobBS || user?.dobBS || "",
+    gender: sanitized?.gender || user?.gender || "",
+    age: sanitized?.age || user?.age || derivedAge,
+    religion: sanitized?.religion || user?.religion || "",
+    nationality: sanitized?.nationality || user?.nationality || "",
+    identification: {
+      ...emptyIdentification,
+      ...(sanitized?.identification || {}),
     },
-    // Family Members (table format)
-    familyMembers: user?.familyMembers || [],
-    // Education (multi-entry with documents)
-    education: user?.education || [],
-    // Address sections
-    currentAddress: user?.currentAddress || {
-      houseNo: "",
-      wardNo: "",
-      street: "",
-      municipality: "",
-      district: "",
-      tel: "",
-      fax: "",
-      mobile: "",
-      email: "",
+    familyMembers: sanitized?.familyMembers || user?.familyMembers || [],
+    education: sanitized?.education || user?.education || [],
+    currentAddress: {
+      ...emptyAddress,
+      ...(sanitized?.currentAddress || user?.currentAddress || {}),
     },
-    permanentAddress: user?.permanentAddress || {
-      houseNo: "",
-      wardNo: "",
-      street: "",
-      municipality: "",
-      district: "",
-      tel: "",
-      fax: "",
-      mobile: "",
-      email: "",
+    permanentAddress: {
+      ...emptyAddress,
+      ...(sanitized?.permanentAddress || user?.permanentAddress || {}),
     },
-  });
+  };
+};
 
-  const [errors, setErrors] = useState({});
+const Profile = () => {
+  const { user, updateCurrentUser, refreshCurrentUser } = useAuth();
+  const { showToast } = useToast();
+
+  const [form, setForm] = useState(() => buildInitialForm(user));
+
+  const [managers, setManagers] = useState([]);
   const [imageCropModal, setImageCropModal] = useState(false);
   const [tempImage, setTempImage] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
-  const [validationErrors, setValidationErrors] = useState(0);
   const [previewDocument, setPreviewDocument] = useState(null);
   const [previewTitle, setPreviewTitle] = useState("");
   const [ariaLiveMessage, setAriaLiveMessage] = useState("");
+  const [errors, setErrors] = useState({});
+  const lastUnsavedToastAtRef = useRef(0);
+  const profileImageObjectUrlRef = useRef(null);
+  const verificationStatus = String(user?.verification_status || "").trim();
+  const verificationReason = String(user?.verification_reason || "").trim();
+  const isProfileLocked =
+    user?.role === "user" &&
+    (verificationStatus === "Approved" ||
+      (verificationStatus === "Pending" &&
+        verificationReason === PROFILE_REVIEW_PENDING_REASON));
 
   // Ref for error announcement
   const errorAnnouncementRef = useRef(null);
 
-  // Debounce form for validation
-  const debouncedForm = useDebounce(form, 500);
-
   // Unsaved changes warning
-  useUnsavedChanges(hasUnsavedChanges);
+  const warnUnsavedChanges = useCallback(() => {
+    const now = Date.now();
+    if (now - lastUnsavedToastAtRef.current < UNSAVED_TOAST_COOLDOWN_MS) {
+      return;
+    }
+
+    lastUnsavedToastAtRef.current = now;
+    showToast("info", "You have unsaved profile changes.", {
+      title: "Unsaved Changes",
+      duration: 5000,
+    });
+  }, [showToast]);
+
+  useUnsavedChanges(hasUnsavedChanges, warnUnsavedChanges);
 
   // Auto-save draft to localStorage
   useAutoSave(
@@ -132,35 +255,114 @@ const Profile = () => {
           JSON.stringify({
             data: form,
             timestamp: Date.now(),
-          })
+          }),
         );
         setLastSaved(new Date());
       }
     }, [form, hasUnsavedChanges, user.id]),
-    30000
+    30000,
   ); // Auto-save every 30 seconds
 
   // Load draft on mount
   useEffect(() => {
+    if (!user?.id) return;
+
     const draft = localStorage.getItem(`profile_draft_${user.id}`);
     if (draft) {
       try {
         const { data, timestamp } = JSON.parse(draft);
         // Only load draft if it's less than 24 hours old
         if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
-          const loadDraft = window.confirm(
-            "Found an unsaved draft. Would you like to restore it?"
-          );
-          if (loadDraft) {
-            setForm(data);
-            setHasUnsavedChanges(true);
-          }
+          setForm(sanitizeProfileData(data));
+          setHasUnsavedChanges(true);
+          showToast("info", "Unsaved draft restored automatically.", {
+            title: "Draft Restored",
+            duration: 4000,
+          });
         }
       } catch (error) {
         console.error("Failed to load draft:", error);
       }
     }
-  }, [user.id]);
+  }, [showToast, user?.id]);
+
+  // Load available managers (for manager assignment in employee profile)
+  useEffect(() => {
+    const loadManagers = async () => {
+      try {
+        const allUsers = await userAPI.getAll();
+        // Filter managers: those with admin role or marked as section managers
+        const managersList = allUsers.filter(
+          (u) =>
+            u.role === "admin" ||
+            u.role === "superadmin" ||
+            u.is_section_manager === true,
+        );
+        setManagers(managersList);
+      } catch (error) {
+        console.error("Failed to load managers:", error);
+      }
+    };
+    loadManagers();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    refreshCurrentUser();
+
+    const handleFocus = () => {
+      refreshCurrentUser();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [refreshCurrentUser, user?.id]);
+
+  // Load profile from backend tables
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!user?.id) return;
+      try {
+        const profile = await profileAPI.getByEmployeeId(user.id);
+        const initial = buildInitialForm(user, profile);
+        const files = await profileFileAPI.list(user.id, "profile");
+        const latestProfileImage = files.find(
+          (file) => file.field_name === "profileImage",
+        );
+        const profileImageRef =
+          latestProfileImage?.id ||
+          profile?.profileImage ||
+          user?.profileImage ||
+          user?.profile_image;
+
+        if (profileImageRef) {
+          const objectUrl =
+            await profileFileAPI.createObjectUrl(profileImageRef);
+          if (profileImageObjectUrlRef.current) {
+            URL.revokeObjectURL(profileImageObjectUrlRef.current);
+          }
+          profileImageObjectUrlRef.current = objectUrl;
+          initial.profileImage = objectUrl;
+        }
+        setForm(initial);
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+      }
+    };
+    loadProfile();
+
+    return () => {
+      if (profileImageObjectUrlRef.current) {
+        URL.revokeObjectURL(profileImageObjectUrlRef.current);
+        profileImageObjectUrlRef.current = null;
+      }
+    };
+  }, [user]);
 
   // Helper function to announce messages to screen readers
   const announceToScreenReader = useCallback((message) => {
@@ -168,53 +370,125 @@ const Profile = () => {
     setTimeout(() => setAriaLiveMessage(""), 3000);
   }, []);
 
-  // Real-time validation
-  useEffect(() => {
-    const errors = validateFormRealtime(debouncedForm);
-    const errorCount = Object.keys(errors).length;
-    setValidationErrors(errorCount);
-
-    // Announce validation status to screen readers
-    if (errorCount > 0) {
-      announceToScreenReader(
-        `${errorCount} validation error${errorCount > 1 ? "s" : ""} found`
-      );
-    }
-  }, [debouncedForm, announceToScreenReader]);
-
   // Memoized handlers
-  const handleChange = useCallback(
-    (path, value) => {
-      setForm((prev) => ({ ...prev, [path]: value }));
-      setHasUnsavedChanges(true);
-      if (errors[path]) {
-        setErrors((prev) => ({ ...prev, [path]: "" }));
-      }
-    },
-    [errors]
-  );
+  const handleChange = useCallback((path, value) => {
+    setForm((prev) => ({ ...prev, [path]: value }));
+    setHasUnsavedChanges(true);
+    setErrors((prev) => {
+      if (!prev[path]) return prev;
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+  }, []);
 
-  const handleNestedChange = useCallback(
-    (section, field, value) => {
-      setForm((prev) => ({
-        ...prev,
-        [section]: { ...prev[section], [field]: value },
-      }));
-      setHasUnsavedChanges(true);
-      if (errors[`${section}.${field}`]) {
-        setErrors((prev) => ({ ...prev, [`${section}.${field}`]: "" }));
+  const handleNestedChange = useCallback((section, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [section]: { ...prev[section], [field]: value },
+    }));
+    setHasUnsavedChanges(true);
+    const key = `${section}.${field}`;
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const validateProfileForm = useCallback(() => {
+    const nextErrors = {};
+
+    const requiredIdentificationFields = [
+      "accountHolderNameNepali",
+      "citizenshipNo",
+      "citizenshipIssuePlace",
+      "panNo",
+    ];
+
+    requiredIdentificationFields.forEach((field) => {
+      if (!String(form.identification?.[field] || "").trim()) {
+        nextErrors[`identification.${field}`] = "This field is required";
       }
-    },
-    [errors]
-  );
+    });
+
+    const requiredAddressFields = [
+      "houseNo",
+      "wardNo",
+      "municipality",
+      "district",
+      "mobile",
+    ];
+
+    ["currentAddress", "permanentAddress"].forEach((section) => {
+      requiredAddressFields.forEach((field) => {
+        if (!String(form?.[section]?.[field] || "").trim()) {
+          nextErrors[`${section}.${field}`] = "This field is required";
+        }
+      });
+
+      const mobile = String(form?.[section]?.mobile || "").trim();
+      const email = String(form?.[section]?.email || "").trim();
+
+      if (
+        mobile &&
+        !nextErrors[`${section}.mobile`] &&
+        !MOBILE_REGEX.test(mobile)
+      ) {
+        nextErrors[`${section}.mobile`] = "Mobile number must be 10 digits";
+      }
+
+      if (email && !EMAIL_REGEX.test(email)) {
+        nextErrors[`${section}.email`] = "Enter a valid email address";
+      }
+    });
+
+    (form.familyMembers || []).forEach((member, index) => {
+      if (!String(member?.relationship || "").trim()) {
+        nextErrors[`familyMember.${index}.relationship`] =
+          "Relationship is required";
+      }
+      if (!String(member?.name || "").trim()) {
+        nextErrors[`familyMember.${index}.name`] = "Name is required";
+      }
+    });
+
+    (form.education || []).forEach((edu, index) => {
+      if (!String(edu?.degree || "").trim()) {
+        nextErrors[`education.${index}.degree`] = "Degree is required";
+      }
+      if (!String(edu?.institute || "").trim()) {
+        nextErrors[`education.${index}.institute`] = "Institute is required";
+      }
+      const year = String(edu?.year || "").trim();
+      if (year && !/^\d{4}$/.test(year)) {
+        nextErrors[`education.${index}.year`] = "Use YYYY format";
+      }
+    });
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }, [form]);
 
   const handleImageUpload = useCallback(
-    (e) => {
+    async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
       if (!file.type.startsWith("image/")) {
-        showToast("error", "Please upload a valid image file.", {
+        showToast("error", "Profile image must be JPG, JPEG, or PNG.", {
+          title: "Invalid File",
+        });
+        return;
+      }
+
+      if (
+        !ALLOWED_PROFILE_IMAGE_MIME_TYPES.includes(
+          (file.type || "").toLowerCase(),
+        )
+      ) {
+        showToast("error", "Profile image must be JPG, JPEG, or PNG.", {
           title: "Invalid File",
         });
         return;
@@ -227,14 +501,35 @@ const Profile = () => {
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        setTempImage(reader.result);
-        setImageCropModal(true);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const uploaded = await profileFileAPI.upload(
+          user.id,
+          file,
+          "profile",
+          "profileImage",
+        );
+        const objectUrl = await profileFileAPI.createObjectUrl(uploaded.id);
+        if (profileImageObjectUrlRef.current) {
+          URL.revokeObjectURL(profileImageObjectUrlRef.current);
+        }
+        profileImageObjectUrlRef.current = objectUrl;
+        handleChange("profileImage", objectUrl);
+        updateCurrentUser({ profileImage: uploaded.id });
+        showToast("success", "Profile image uploaded.", {
+          title: "Image Uploaded",
+        });
+      } catch (error) {
+        const detail = error.response?.data?.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message || "Image upload failed.";
+        showToast("error", message, {
+          title: "Upload Failed",
+        });
+      }
     },
-    [showToast]
+    [handleChange, showToast, user.id],
   );
 
   const handleImageCrop = useCallback(() => {
@@ -263,24 +558,22 @@ const Profile = () => {
     setHasUnsavedChanges(true);
   }, []);
 
-  const updateFamilyMember = useCallback(
-    (index, field, value) => {
-      setForm((prev) => ({
-        ...prev,
-        familyMembers: prev.familyMembers.map((member, i) =>
-          i === index ? { ...member, [field]: value } : member
-        ),
-      }));
-      setHasUnsavedChanges(true);
-      if (errors[`familyMember.${index}.${field}`]) {
-        setErrors((prev) => ({
-          ...prev,
-          [`familyMember.${index}.${field}`]: "",
-        }));
-      }
-    },
-    [errors]
-  );
+  const updateFamilyMember = useCallback((index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      familyMembers: prev.familyMembers.map((member, i) =>
+        i === index ? { ...member, [field]: value } : member,
+      ),
+    }));
+    setHasUnsavedChanges(true);
+    setErrors((prev) => {
+      const key = `familyMember.${index}.${field}`;
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const addEducation = useCallback(() => {
     setForm((prev) => ({
@@ -301,33 +594,101 @@ const Profile = () => {
     setHasUnsavedChanges(true);
   }, []);
 
-  const updateEducation = useCallback(
-    (index, field, value) => {
-      setForm((prev) => ({
-        ...prev,
-        education: prev.education.map((edu, i) =>
-          i === index ? { ...edu, [field]: value } : edu
-        ),
-      }));
-      setHasUnsavedChanges(true);
-      if (errors[`education.${index}.${field}`]) {
-        setErrors((prev) => ({ ...prev, [`education.${index}.${field}`]: "" }));
-      }
-    },
-    [errors]
-  );
+  const updateEducation = useCallback((index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      education: prev.education.map((edu, i) =>
+        i === index ? { ...edu, [field]: value } : edu,
+      ),
+    }));
+    setHasUnsavedChanges(true);
+    setErrors((prev) => {
+      const key = `education.${index}.${field}`;
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const handleEducationDocUpload = useCallback(
-    (index, e) => {
+    async (index, e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        updateEducation(index, "document", reader.result);
-      };
-      reader.readAsDataURL(file);
+
+      if (!ALLOWED_DOC_MIME_TYPES.includes((file.type || "").toLowerCase())) {
+        showToast("error", "Education document must be JPG, JPEG, or PDF.");
+        return;
+      }
+
+      let uploaded;
+      try {
+        uploaded = await profileFileAPI.upload(
+          user.id,
+          file,
+          "education",
+          `education_${index}`,
+        );
+      } catch (error) {
+        const detail = error.response?.data?.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message || "Education document upload failed.";
+        showToast("error", message);
+        return;
+      }
+
+      // Save a backend file reference, not a base64 payload, to prevent DB overflow.
+      updateEducation(
+        index,
+        "document",
+        uploaded.file_path || String(uploaded.id),
+      );
+      showToast("success", "Education document uploaded.");
     },
-    [updateEducation]
+    [showToast, updateEducation, user.id],
+  );
+
+  const handleIdentificationDocUpload = useCallback(
+    async (field, file) => {
+      if (!file) return;
+
+      if (!ALLOWED_DOC_MIME_TYPES.includes((file.type || "").toLowerCase())) {
+        showToast(
+          "error",
+          "Identification document must be JPG, JPEG, or PDF.",
+        );
+        return;
+      }
+
+      let uploaded;
+      try {
+        uploaded = await profileFileAPI.upload(
+          user.id,
+          file,
+          "identification",
+          field,
+        );
+      } catch (error) {
+        const detail = error.response?.data?.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message || "Identification document upload failed.";
+        showToast("error", message);
+        return;
+      }
+
+      // Save a backend file reference, not a base64 payload, to prevent DB overflow.
+      handleNestedChange(
+        "identification",
+        field,
+        uploaded.file_path || String(uploaded.id),
+      );
+      showToast("success", "Identification document uploaded.");
+    },
+    [handleNestedChange, showToast, user.id],
   );
 
   const handleCopyAddress = useCallback(() => {
@@ -340,206 +701,111 @@ const Profile = () => {
     announceToScreenReader("Current address copied to permanent address");
   }, [showToast, announceToScreenReader]);
 
-  // Document preview handler
-  const handlePreviewDocument = useCallback(
-    (document, title) => {
-      setPreviewDocument(document);
-      setPreviewTitle(title);
-      announceToScreenReader(`Opening preview for ${title}`);
-    },
-    [announceToScreenReader]
-  );
-
   // Export profile to PDF
   const handleExportPDF = useCallback(() => {
     exportProfileToPDF(user, form);
     announceToScreenReader("Exporting profile to PDF");
     showToast(
       "success",
-      "Profile export initiated. Please use browser's print function to save as PDF."
+      "Profile export initiated. Please use browser's print function to save as PDF.",
     );
   }, [user, form, announceToScreenReader, showToast]);
-
-  // Real-time validation function
-  const validateFormRealtime = (formData) => {
-    const newErrors = {};
-
-    if (formData.identification.accountHolderNameNepali) {
-      if (!formData.identification.accountHolderNameNepali.trim()) {
-        newErrors["identification.accountHolderNameNepali"] =
-          "Nepali name is required";
-      }
-    }
-
-    if (formData.identification.citizenshipNo) {
-      if (!formData.identification.citizenshipNo.trim()) {
-        newErrors["identification.citizenshipNo"] =
-          "Citizenship number is required";
-      }
-    }
-
-    if (formData.identification.citizenshipIssuePlace) {
-      if (!formData.identification.citizenshipIssuePlace.trim()) {
-        newErrors["identification.citizenshipIssuePlace"] =
-          "Issue place is required";
-      }
-    }
-
-    if (formData.identification.panNo) {
-      if (!formData.identification.panNo.trim()) {
-        newErrors["identification.panNo"] = "PAN number is required";
-      }
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (
-      formData.currentAddress.email &&
-      !emailRegex.test(formData.currentAddress.email)
-    ) {
-      newErrors["currentAddress.email"] = "Invalid email format";
-    }
-    if (
-      formData.permanentAddress.email &&
-      !emailRegex.test(formData.permanentAddress.email)
-    ) {
-      newErrors["permanentAddress.email"] = "Invalid email format";
-    }
-
-    const mobileRegex = /^\d{10}$/;
-    if (
-      formData.currentAddress.mobile &&
-      !mobileRegex.test(formData.currentAddress.mobile)
-    ) {
-      newErrors["currentAddress.mobile"] = "Mobile must be 10 digits";
-    }
-    if (
-      formData.permanentAddress.mobile &&
-      !mobileRegex.test(formData.permanentAddress.mobile)
-    ) {
-      newErrors["permanentAddress.mobile"] = "Mobile must be 10 digits";
-    }
-
-    return newErrors;
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!form.identification.accountHolderNameNepali.trim()) {
-      newErrors["identification.accountHolderNameNepali"] =
-        "Nepali name is required";
-    }
-    if (!form.identification.citizenshipNo.trim()) {
-      newErrors["identification.citizenshipNo"] =
-        "Citizenship number is required";
-    }
-    if (!form.identification.citizenshipIssuePlace.trim()) {
-      newErrors["identification.citizenshipIssuePlace"] =
-        "Issue place is required";
-    }
-    if (!form.identification.panNo.trim()) {
-      newErrors["identification.panNo"] = "PAN number is required";
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (
-      form.currentAddress.email &&
-      !emailRegex.test(form.currentAddress.email)
-    ) {
-      newErrors["currentAddress.email"] = "Invalid email format";
-    }
-    if (
-      form.permanentAddress.email &&
-      !emailRegex.test(form.permanentAddress.email)
-    ) {
-      newErrors["permanentAddress.email"] = "Invalid email format";
-    }
-
-    const mobileRegex = /^\d{10}$/;
-    if (
-      form.currentAddress.mobile &&
-      !mobileRegex.test(form.currentAddress.mobile)
-    ) {
-      newErrors["currentAddress.mobile"] = "Mobile must be 10 digits";
-    }
-    if (
-      form.permanentAddress.mobile &&
-      !mobileRegex.test(form.permanentAddress.mobile)
-    ) {
-      newErrors["permanentAddress.mobile"] = "Mobile must be 10 digits";
-    }
-
-    form.familyMembers.forEach((member, index) => {
-      if (!member.relationship.trim()) {
-        newErrors[`familyMember.${index}.relationship`] =
-          "Relationship is required";
-      }
-      if (!member.name.trim()) {
-        newErrors[`familyMember.${index}.name`] = "Name is required";
-      }
-    });
-
-    form.education.forEach((edu, index) => {
-      if (!edu.degree.trim()) {
-        newErrors[`education.${index}.degree`] = "Degree is required";
-      }
-      if (!edu.institute.trim()) {
-        newErrors[`education.${index}.institute`] = "Institute is required";
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      const errorCount = Object.keys(errors).length;
-      showToast("error", "Please fix all validation errors.", {
-        title: "Validation Failed",
+    if (!validateProfileForm()) {
+      showToast("error", "Please fix validation errors before saving.", {
+        title: "Validation Error",
       });
-
-      // Announce errors to screen readers
-      announceToScreenReader(
-        `Form validation failed. ${errorCount} error${
-          errorCount > 1 ? "s" : ""
-        } found. Please review and correct.`
-      );
-
-      // Focus first error field for keyboard navigation
-      const firstErrorKey = Object.keys(errors)[0];
-      const errorElement = document.querySelector(
-        `[name="${firstErrorKey}"], [data-error-field="${firstErrorKey}"]`
-      );
-      if (errorElement) {
-        errorElement.focus();
-        errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      announceToScreenReader("Please fix validation errors before saving");
       return;
     }
 
     setIsSaving(true);
     announceToScreenReader("Saving profile changes");
 
-    // Simulate API delay for loading state
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    updateUserProfile(user.id, {
-      profileImage: form.profileImage,
-      identification: form.identification,
-      familyMembers: form.familyMembers,
-      education: form.education,
-      currentAddress: form.currentAddress,
-      permanentAddress: form.permanentAddress,
-      nationality: form.nationality,
-      religion: form.religion,
-      dobBS: form.dobBS,
+    const payload = {
+      profileImage: resolveProfileImageForSave(
+        form.profileImage,
+        user?.profileImage || user?.profile_image,
+      ),
+      role: form.role,
+      department: form.department,
+      manager: form.manager,
       joiningDateBS: form.joiningDateBS,
+      dateOfBirth: form.dateOfBirth,
+      dobBS: form.dobBS,
       gender: form.gender,
       age: form.age,
-    });
+      religion: form.religion,
+      nationality: form.nationality,
+      identification: {
+        ...form.identification,
+        citizenshipDocument: sanitizeDocumentValue(
+          form.identification.citizenshipDocument,
+        ),
+        nationalIdCardDocument: sanitizeDocumentValue(
+          form.identification.nationalIdCardDocument,
+        ),
+        drivingLicenseDocument: sanitizeDocumentValue(
+          form.identification.drivingLicenseDocument,
+        ),
+        panDocument: sanitizeDocumentValue(form.identification.panDocument),
+      },
+      familyMembers: form.familyMembers,
+      education: form.education.map((item) => ({
+        ...item,
+        document: sanitizeDocumentValue(item.document),
+      })),
+      currentAddress: form.currentAddress,
+      permanentAddress: form.permanentAddress,
+    };
+
+    try {
+      const saved = await profileAPI.updateByEmployeeId(user.id, payload);
+      setForm(buildInitialForm(user, saved));
+      updateCurrentUser({
+        profileImage: payload.profileImage,
+        department: saved.department,
+        manager: saved.manager,
+        dobBS: saved.dobBS,
+        gender: saved.gender,
+        ...(user?.role === "user"
+          ? {
+              verification_status: "Pending",
+              verification_reason: PROFILE_REVIEW_PENDING_REASON,
+            }
+          : {}),
+      });
+    } catch (error) {
+      setIsSaving(false);
+      const backendFieldErrors = getApiValidationErrors(error, {
+        "familyMembers.relationship": "familyMember.relationship",
+        "familyMembers.name": "familyMember.name",
+      });
+
+      if (Object.keys(backendFieldErrors).length > 0) {
+        const normalized = {};
+        Object.entries(backendFieldErrors).forEach(([key, value]) => {
+          normalized[
+            key.replace(/familyMembers\.(\d+)\./g, "familyMember.$1.")
+          ] = value;
+        });
+        setErrors((prev) => ({ ...prev, ...normalized }));
+      }
+
+      const backendMessage = getApiErrorMessage(
+        error,
+        "Failed to save profile.",
+      );
+
+      showToast("error", backendMessage, {
+        title: "Save Failed",
+      });
+      announceToScreenReader(backendMessage);
+      return;
+    }
 
     // Clear draft from localStorage
     localStorage.removeItem(`profile_draft_${user.id}`);
@@ -551,7 +817,15 @@ const Profile = () => {
 
     // Announce success to screen readers
     announceToScreenReader("Profile saved successfully");
-    showToast("success", "Profile updated successfully!", { title: "Success" });
+    if (user?.role === "user") {
+      showToast("success", "Profile updated and submitted for admin review.", {
+        title: "Submitted",
+      });
+    } else {
+      showToast("success", "Profile updated successfully!", {
+        title: "Success",
+      });
+    }
   };
 
   return (
@@ -586,6 +860,7 @@ const Profile = () => {
       )}
 
       <form
+        noValidate
         onSubmit={handleSubmit}
         className="space-y-8"
         aria-label="Employee profile form"
@@ -627,66 +902,105 @@ const Profile = () => {
 
         <ProfileProgress form={form} />
 
-        {validationErrors > 0 && (
-          <div
-            className="bg-red-50 border border-red-200 rounded-xl p-4"
-            role="alert"
-            aria-live="assertive"
-            aria-atomic="true"
-          >
-            <div className="flex items-center gap-2 text-red-700">
-              <AlertCircle size={20} aria-hidden="true" />
-              <p className="font-medium">
-                {validationErrors} validation error
-                {validationErrors > 1 ? "s" : ""} found
+        {user?.role === "user" &&
+          verificationStatus === "Pending" &&
+          verificationReason === PROFILE_REVIEW_PENDING_REASON && (
+            <div
+              className="bg-amber-50 border border-amber-200 rounded-xl p-4"
+              role="status"
+            >
+              <div className="flex items-center gap-2 text-amber-800 font-medium">
+                <AlertCircle size={18} aria-hidden="true" />
+                Profile submitted for review
+              </div>
+              <p className="text-sm text-amber-700 mt-1">
+                Your profile is locked until admin reviews it.
               </p>
             </div>
-            <p className="text-sm text-red-600 mt-1">
-              Please fix the errors highlighted in red below.
+          )}
+
+        {user?.role === "user" && verificationStatus === "Approved" && (
+          <div
+            className="bg-emerald-50 border border-emerald-200 rounded-xl p-4"
+            role="status"
+          >
+            <div className="flex items-center gap-2 text-emerald-800 font-medium">
+              <AlertCircle size={18} aria-hidden="true" />
+              Profile approved
+            </div>
+            <p className="text-sm text-emerald-700 mt-1">
+              Your latest profile information was approved by admin.
             </p>
           </div>
         )}
 
-        <ProfileImageSection
-          form={form}
-          handleImageUpload={handleImageUpload}
-          imageCropModal={imageCropModal}
-          tempImage={tempImage}
-          handleImageCrop={handleImageCrop}
-          setImageCropModal={setImageCropModal}
-        />
+        {user?.role === "user" && verificationStatus === "Rejected" && (
+          <div
+            className="bg-rose-50 border border-rose-200 rounded-xl p-4"
+            role="status"
+          >
+            <div className="flex items-center gap-2 text-rose-800 font-medium">
+              <AlertCircle size={18} aria-hidden="true" />
+              Profile rejected
+            </div>
+            <p className="text-sm text-rose-700 mt-1">
+              {verificationReason ||
+                "Admin rejected your profile update. You can edit and resubmit it."}
+            </p>
+          </div>
+        )}
 
-        <EmployeeInfoSection form={form} handleChange={handleChange} />
+        <fieldset
+          disabled={isProfileLocked}
+          className={isProfileLocked ? "space-y-8 opacity-80" : "space-y-8"}
+        >
+          <ProfileImageSection
+            form={form}
+            handleImageUpload={handleImageUpload}
+            imageCropModal={imageCropModal}
+            tempImage={tempImage}
+            handleImageCrop={handleImageCrop}
+            setImageCropModal={setImageCropModal}
+          />
 
-        <IdentificationSection
-          form={form}
-          handleNestedChange={handleNestedChange}
-          errors={errors}
-        />
+          <EmployeeInfoSection
+            form={form}
+            handleChange={handleChange}
+            managers={managers}
+            errors={errors}
+          />
 
-        <FamilyDetailsSection
-          familyMembers={form.familyMembers}
-          addFamilyMember={addFamilyMember}
-          removeFamilyMember={removeFamilyMember}
-          updateFamilyMember={updateFamilyMember}
-          errors={errors}
-        />
+          <IdentificationSection
+            form={form}
+            handleNestedChange={handleNestedChange}
+            handleDocumentUpload={handleIdentificationDocUpload}
+            errors={errors}
+          />
 
-        <EducationSection
-          education={form.education}
-          addEducation={addEducation}
-          removeEducation={removeEducation}
-          updateEducation={updateEducation}
-          handleEducationDocUpload={handleEducationDocUpload}
-          errors={errors}
-        />
+          <FamilyDetailsSection
+            familyMembers={form.familyMembers}
+            addFamilyMember={addFamilyMember}
+            removeFamilyMember={removeFamilyMember}
+            updateFamilyMember={updateFamilyMember}
+            errors={errors}
+          />
 
-        <AddressSection
-          form={form}
-          handleNestedChange={handleNestedChange}
-          errors={errors}
-          onCopyAddress={handleCopyAddress}
-        />
+          <EducationSection
+            education={form.education}
+            addEducation={addEducation}
+            removeEducation={removeEducation}
+            updateEducation={updateEducation}
+            handleEducationDocUpload={handleEducationDocUpload}
+            errors={errors}
+          />
+
+          <AddressSection
+            form={form}
+            handleNestedChange={handleNestedChange}
+            errors={errors}
+            onCopyAddress={handleCopyAddress}
+          />
+        </fieldset>
 
         <div
           className="flex justify-end gap-3"
@@ -700,7 +1014,7 @@ const Profile = () => {
               const draft = localStorage.getItem(`profile_draft_${user.id}`);
               if (draft) {
                 const loadDraft = window.confirm(
-                  "This will discard all unsaved changes. Continue?"
+                  "This will discard all unsaved changes. Continue?",
                 );
                 if (loadDraft) {
                   setForm({
@@ -716,13 +1030,13 @@ const Profile = () => {
               }
             }}
             className="px-6 py-3 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors font-medium"
-            disabled={isSaving || !hasUnsavedChanges}
+            disabled={isSaving || !hasUnsavedChanges || isProfileLocked}
           >
             Discard Changes
           </button>
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || isProfileLocked}
             aria-label={
               isSaving ? "Saving profile changes" : "Save profile changes"
             }

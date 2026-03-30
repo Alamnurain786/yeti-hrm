@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useCallback, useEffect } from "react";
 import { useDebounce } from "./useDebounce";
 
@@ -70,7 +71,7 @@ export const useValidation = (form, debounceDelay = 500) => {
       const citizenshipErrors = validateField(
         "Citizenship Number",
         form.identification.citizenshipNo,
-        { minLength: 5 }
+        { minLength: 5 },
       );
       if (citizenshipErrors.length > 0)
         errors.citizenshipNo = citizenshipErrors[0];

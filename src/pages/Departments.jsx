@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Search, Building2, Users, Pencil, Trash2 } from "lucide-react";
-// import { useMockData } from "../context/MockData";
 import { useToast } from "../context/ToastContext";
+import {
+  departmentAPI,
+  getApiErrorMessage,
+  getApiValidationErrors,
+  userAPI,
+} from "../services/backendApi";
 
 const Departments = () => {
-  const {
-    departments,
-    users,
-    addDepartment,
-    updateDepartment,
-    deleteDepartment,
-  } = useMockData();
+  const [departments, setDepartments] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [users, setUsers] = useState([]);
   const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,8 +21,9 @@ const Departments = () => {
     description: "",
     headOfDepartment: "",
   });
+  const [errors, setErrors] = useState({});
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Confirmation modal state
   const [confirmData, setConfirmData] = useState({
     open: false,
     title: "",
@@ -35,12 +37,47 @@ const Departments = () => {
   const closeConfirm = () =>
     setConfirmData({ open: false, title: "", message: "", onConfirm: null });
 
-  // Calculate employee count per department
+  const loadData = async () => {
+    try {
+      const [departmentList, sectionList, userList] = await Promise.all([
+        departmentAPI.getAll(),
+        departmentAPI.getSections(),
+        userAPI.getAll(),
+      ]);
+
+      setDepartments(
+        departmentList.map((d) => ({
+          ...d,
+          headOfDepartment: d.head_of_department,
+        })),
+      );
+      setSections(Array.isArray(sectionList) ? sectionList : []);
+      setUsers(userList);
+    } catch {
+      showToast("error", "Failed to load departments", {
+        title: "Load Failed",
+      });
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const getDepartmentStats = (deptName) => {
     return users.filter((u) => u.department === deptName).length;
   };
 
-  // Filter departments based on search
+  const getDepartmentSectionCount = (dept) => {
+    const deptId = typeof dept === "string" ? null : dept.id;
+    const deptName = typeof dept === "string" ? dept : dept.name;
+    return sections.filter(
+      (section) =>
+        (deptId && section.department_id === deptId) ||
+        section.department_name === deptName,
+    ).length;
+  };
+
   const filteredDepartments = Array.isArray(departments)
     ? departments.filter((dept) => {
         const deptName = typeof dept === "string" ? dept : dept.name;
@@ -72,48 +109,98 @@ const Departments = () => {
       });
     }
     setShowModal(true);
+    setErrors({});
+    setHasChanges(false);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingDept(null);
     setFormData({ name: "", description: "", headOfDepartment: "" });
+    setErrors({});
+    setHasChanges(false);
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setHasChanges(true);
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!formData.name.trim()) {
-      showToast("error", "Department name is required", {
-        title: "Validation Error",
+  const handleCloseWithGuard = () => {
+    if (hasChanges) {
+      showToast("info", "You have unsaved changes in this form.", {
+        title: "Unsaved Changes",
+        duration: 6000,
+        actions: [
+          {
+            label: "Discard",
+            variant: "danger",
+            onClick: handleCloseModal,
+          },
+          {
+            label: "Keep Editing",
+            onClick: () => {},
+          },
+        ],
       });
       return;
     }
-
-    if (editingDept) {
-      // Update existing department
-      const oldName = editingDept.name || editingDept;
-      updateDepartment(oldName, formData);
-      showToast("success", `${formData.name} updated successfully`, {
-        title: "Department Updated",
-      });
-    } else {
-      // Add new department
-      addDepartment(formData);
-      showToast("success", `${formData.name} added successfully`, {
-        title: "Department Added",
-      });
-    }
-
     handleCloseModal();
   };
 
-  const handleDelete = (dept) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      if (editingDept) {
+        await departmentAPI.update(editingDept.id, {
+          name: formData.name,
+          description: formData.description,
+          head_of_department: formData.headOfDepartment,
+        });
+        showToast("success", `${formData.name} updated successfully`, {
+          title: "Department Updated",
+        });
+      } else {
+        await departmentAPI.create({
+          name: formData.name,
+          description: formData.description,
+          head_of_department: formData.headOfDepartment,
+        });
+        showToast("success", `${formData.name} added successfully`, {
+          title: "Department Added",
+        });
+      }
+
+      handleCloseModal();
+      await loadData();
+    } catch (error) {
+      const validationErrors = getApiValidationErrors(error, {
+        head_of_department: "headOfDepartment",
+      });
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors((prev) => ({ ...prev, ...validationErrors }));
+      }
+
+      showToast(
+        "error",
+        getApiErrorMessage(error, "Failed to save department"),
+        {
+          title: "Error",
+        },
+      );
+    }
+  };
+
+  const handleDelete = async (dept) => {
     const deptName = typeof dept === "string" ? dept : dept.name;
     const employeeCount = getDepartmentStats(deptName);
 
@@ -123,7 +210,7 @@ const Departments = () => {
         `Cannot delete ${deptName}. ${employeeCount} employees assigned.`,
         {
           title: "Delete Failed",
-        }
+        },
       );
       return;
     }
@@ -131,19 +218,27 @@ const Departments = () => {
     openConfirm({
       title: "Delete Department",
       message: `Are you sure you want to delete ${deptName}?`,
-      onConfirm: () => {
-        deleteDepartment(deptName);
-        showToast("success", `${deptName} deleted successfully`, {
-          title: "Department Deleted",
-        });
-        closeConfirm();
+      onConfirm: async () => {
+        try {
+          await departmentAPI.delete(dept.id);
+          showToast("success", `${deptName} deleted successfully`, {
+            title: "Department Deleted",
+          });
+          closeConfirm();
+          await loadData();
+        } catch (error) {
+          console.error("Error deleting department:", error);
+          showToast("error", "Failed to delete department", {
+            title: "Error",
+          });
+        }
       },
     });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Departments</h1>
           <p className="text-slate-500 mt-1">
@@ -151,7 +246,7 @@ const Departments = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => handleOpenModal()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center transition-colors shadow-lg shadow-blue-600/30"
         >
           <Plus size={20} className="mr-2" />
@@ -161,7 +256,7 @@ const Departments = () => {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100">
-          <div className="flex items-center bg-slate-50 rounded-xl px-4 py-2 w-64 border border-slate-100">
+          <div className="flex items-center bg-slate-50 rounded-xl px-4 py-2 w-full sm:w-64 border border-slate-100">
             <Search size={18} className="text-slate-400" />
             <input
               type="text"
@@ -186,6 +281,7 @@ const Departments = () => {
                   ? "Not assigned"
                   : dept.headOfDepartment || "Not assigned";
               const employeeCount = getDepartmentStats(deptName);
+              const sectionCount = getDepartmentSectionCount(dept);
 
               return (
                 <div
@@ -222,9 +318,14 @@ const Departments = () => {
                   </p>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                    <div className="flex items-center text-sm text-slate-600">
-                      <Users size={16} className="mr-1.5" />
-                      <span>{employeeCount} Employees</span>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                      <span className="inline-flex items-center">
+                        <Users size={16} className="mr-1.5" />
+                        {employeeCount} Employees
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
+                        {sectionCount} Sections
+                      </span>
                     </div>
                     {deptHead && deptHead !== "Not assigned" && (
                       <span
@@ -257,7 +358,7 @@ const Departments = () => {
               </h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form noValidate onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
                 <label
                   htmlFor="name"
@@ -271,10 +372,13 @@ const Departments = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.name ? "border-red-500 bg-red-50" : "border-slate-300"}`}
                   placeholder="e.g., Engineering"
                   required
                 />
+                {errors.name && (
+                  <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                )}
               </div>
 
               <div>
@@ -290,9 +394,14 @@ const Departments = () => {
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className={`w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.description ? "border-red-500 bg-red-50" : "border-slate-300"}`}
                   placeholder="Brief description of the department"
                 />
+                {errors.description && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.description}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -308,15 +417,20 @@ const Departments = () => {
                   name="headOfDepartment"
                   value={formData.headOfDepartment}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.headOfDepartment ? "border-red-500 bg-red-50" : "border-slate-300"}`}
                   placeholder="e.g., John Doe"
                 />
+                {errors.headOfDepartment && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.headOfDepartment}
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={handleCloseModal}
+                  onClick={handleCloseWithGuard}
                   className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm"
                 >
                   Cancel

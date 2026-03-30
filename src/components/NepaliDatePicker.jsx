@@ -1,8 +1,16 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from "react";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import NepaliDate from "nepali-date-converter";
 
-const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
+const NepaliDatePicker = ({
+  value,
+  onChange,
+  placeholder,
+  className = "",
+  calendarAlign = "left",
+  disabled = false,
+}) => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [displayValue, setDisplayValue] = useState(value || "");
   const calendarRef = useRef(null);
@@ -42,6 +50,12 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
   useEffect(() => {
     setDisplayValue(value || "");
   }, [value]);
+
+  useEffect(() => {
+    if (disabled) {
+      setShowCalendar(false);
+    }
+  }, [disabled]);
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -97,13 +111,12 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
 
   // Handle date selection
   const handleDateSelect = (day) => {
+    if (disabled) return;
     const year = currentDate.getYear();
     const month = currentDate.getMonth();
-    const selectedDate = new NepaliDate(year, month, day);
-
     const formattedDate = `${year}-${String(month + 1).padStart(
       2,
-      "0"
+      "0",
     )}-${String(day).padStart(2, "0")}`;
 
     setDisplayValue(formattedDate);
@@ -163,6 +176,7 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
   const calendarDays = generateCalendar();
   const year = currentDate.getYear();
   const month = currentDate.getMonth();
+  const popupAlignClass = calendarAlign === "right" ? "right-0" : "left-0";
 
   // Check if a day is selected
   const isSelectedDay = (day) => {
@@ -192,28 +206,39 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
         <input
           type="text"
           value={displayValue}
-          onChange={(e) => setDisplayValue(e.target.value)}
+          onChange={(e) => {
+            if (disabled) return;
+            setDisplayValue(e.target.value);
+          }}
           onBlur={(e) => {
+            if (disabled) return;
             // Validate and update on blur
             const inputValue = e.target.value;
             if (inputValue && /^\d{4}-\d{2}-\d{2}$/.test(inputValue)) {
               onChange(inputValue);
             }
           }}
+          disabled={disabled}
           placeholder={placeholder || "YYYY-MM-DD (BS)"}
-          className={`w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 text-sm focus:border-blue-500 ${className}`}
+          className={`w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 text-sm focus:border-blue-500 ${disabled ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""} ${className}`}
         />
         <button
           type="button"
-          onClick={() => setShowCalendar(!showCalendar)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
+          onClick={() => {
+            if (disabled) return;
+            setShowCalendar(!showCalendar);
+          }}
+          disabled={disabled}
+          className={`absolute right-2 top-1/2 -translate-y-1/2 ${disabled ? "text-slate-300 cursor-not-allowed" : "text-slate-400 hover:text-blue-600"}`}
         >
           <Calendar size={18} />
         </button>
       </div>
 
       {showCalendar && (
-        <div className="absolute z-50 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 p-4 w-80">
+        <div
+          className={`absolute ${popupAlignClass} z-50 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 p-4 w-80 max-w-[calc(100vw-2rem)]`}
+        >
           {/* Header with month/year dropdowns and navigation */}
           <div className="mb-4">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -286,7 +311,7 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
                 >
                   {day}
                 </div>
-              )
+              ),
             )}
           </div>
 
@@ -307,8 +332,8 @@ const NepaliDatePicker = ({ value, onChange, placeholder, className = "" }) => {
                     isSelectedDay(item.day)
                       ? "bg-blue-600 text-white font-semibold"
                       : isToday(item.day)
-                      ? "bg-blue-100 text-blue-800 font-semibold"
-                      : "hover:bg-slate-100 text-slate-700"
+                        ? "bg-blue-100 text-blue-800 font-semibold"
+                        : "hover:bg-slate-100 text-slate-700"
                   }
                 `}
               >

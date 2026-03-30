@@ -66,7 +66,7 @@ const ProfileImageSection = memo(
                   <Upload size={16} className="mr-2" /> Upload Profile Image
                   <input
                     type="file"
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png"
                     className="hidden"
                     onChange={handleImageUpload}
                   />
@@ -107,7 +107,7 @@ const ProfileImageSection = memo(
         )}
       </>
     );
-  }
+  },
 );
 
 ProfileImageSection.displayName = "ProfileImageSection";

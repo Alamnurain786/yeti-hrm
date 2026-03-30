@@ -3,7 +3,8 @@ import PropTypes from "prop-types";
 import { MapPin, Copy } from "lucide-react";
 
 const AddressSection = memo(
-  ({ form, handleNestedChange, errors, onCopyAddress }) => {
+  ({ form, handleNestedChange, errors = {}, onCopyAddress }) => {
+    const fieldError = (section, field) => errors[`${section}.${field}`];
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
         <div className="flex items-center mb-4 text-slate-800 font-semibold text-lg">
@@ -18,7 +19,7 @@ const AddressSection = memo(
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                House No. (घर नं.)
+                House No. (घर नं.) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.currentAddress.houseNo}
@@ -26,23 +27,41 @@ const AddressSection = memo(
                   handleNestedChange(
                     "currentAddress",
                     "houseNo",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("currentAddress", "houseNo")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("currentAddress", "houseNo") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("currentAddress", "houseNo")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                Ward No. (वडा नं.)
+                Ward No. (वडा नं.) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.currentAddress.wardNo}
                 onChange={(e) =>
                   handleNestedChange("currentAddress", "wardNo", e.target.value)
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("currentAddress", "wardNo")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("currentAddress", "wardNo") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("currentAddress", "wardNo")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
@@ -53,12 +72,22 @@ const AddressSection = memo(
                 onChange={(e) =>
                   handleNestedChange("currentAddress", "street", e.target.value)
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("currentAddress", "street")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("currentAddress", "street") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("currentAddress", "street")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
                 Municipality/VDC (नपा/गाविस)
+                <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.currentAddress.municipality}
@@ -66,15 +95,24 @@ const AddressSection = memo(
                   handleNestedChange(
                     "currentAddress",
                     "municipality",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("currentAddress", "municipality")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("currentAddress", "municipality") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("currentAddress", "municipality")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                District (जिल्ला)
+                District (जिल्ला) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.currentAddress.district}
@@ -82,39 +120,24 @@ const AddressSection = memo(
                   handleNestedChange(
                     "currentAddress",
                     "district",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("currentAddress", "district")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("currentAddress", "district") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("currentAddress", "district")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                Tel No. (टे.नं.)
-              </label>
-              <input
-                value={form.currentAddress.tel}
-                onChange={(e) =>
-                  handleNestedChange("currentAddress", "tel", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 font-medium">
-                Fax No. (फ्याक्स नं.)
-              </label>
-              <input
-                value={form.currentAddress.fax}
-                onChange={(e) =>
-                  handleNestedChange("currentAddress", "fax", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 font-medium">
-                Mobile (मोबाईल)
+                Mobile (मोबाईल) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.currentAddress.mobile}
@@ -122,15 +145,15 @@ const AddressSection = memo(
                   handleNestedChange("currentAddress", "mobile", e.target.value)
                 }
                 className={`w-full px-3 py-2 rounded-xl border text-sm ${
-                  errors["currentAddress.mobile"]
-                    ? "border-red-300 focus:border-red-500"
+                  fieldError("currentAddress", "mobile")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
                     : "border-slate-200 focus:border-blue-500"
                 }`}
                 placeholder="10 digits"
               />
-              {errors["currentAddress.mobile"] && (
+              {fieldError("currentAddress", "mobile") && (
                 <p className="text-xs text-red-600 mt-1">
-                  {errors["currentAddress.mobile"]}
+                  {fieldError("currentAddress", "mobile")}
                 </p>
               )}
             </div>
@@ -145,14 +168,14 @@ const AddressSection = memo(
                   handleNestedChange("currentAddress", "email", e.target.value)
                 }
                 className={`w-full px-3 py-2 rounded-xl border text-sm ${
-                  errors["currentAddress.email"]
-                    ? "border-red-300 focus:border-red-500"
+                  fieldError("currentAddress", "email")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
                     : "border-slate-200 focus:border-blue-500"
                 }`}
               />
-              {errors["currentAddress.email"] && (
+              {fieldError("currentAddress", "email") && (
                 <p className="text-xs text-red-600 mt-1">
-                  {errors["currentAddress.email"]}
+                  {fieldError("currentAddress", "email")}
                 </p>
               )}
             </div>
@@ -177,7 +200,7 @@ const AddressSection = memo(
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                House No. (घर नं.)
+                House No. (घर नं.) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.permanentAddress.houseNo}
@@ -185,15 +208,24 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "houseNo",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("permanentAddress", "houseNo")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("permanentAddress", "houseNo") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("permanentAddress", "houseNo")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                Ward No. (वडा नं.)
+                Ward No. (वडा नं.) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.permanentAddress.wardNo}
@@ -201,11 +233,20 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "wardNo",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("permanentAddress", "wardNo")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("permanentAddress", "wardNo") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("permanentAddress", "wardNo")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
@@ -217,15 +258,25 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "street",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("permanentAddress", "street")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("permanentAddress", "street") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("permanentAddress", "street")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
                 Municipality/VDC (नपा/गाविस)
+                <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.permanentAddress.municipality}
@@ -233,15 +284,24 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "municipality",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("permanentAddress", "municipality")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("permanentAddress", "municipality") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("permanentAddress", "municipality")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                District (जिल्ला)
+                District (जिल्ला) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.permanentAddress.district}
@@ -249,39 +309,24 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "district",
-                    e.target.value
+                    e.target.value,
                   )
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border text-sm ${
+                  fieldError("permanentAddress", "district")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {fieldError("permanentAddress", "district") && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldError("permanentAddress", "district")}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-600 font-medium">
-                Tel No. (टे.नं.)
-              </label>
-              <input
-                value={form.permanentAddress.tel}
-                onChange={(e) =>
-                  handleNestedChange("permanentAddress", "tel", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 font-medium">
-                Fax No. (फ्याक्स नं.)
-              </label>
-              <input
-                value={form.permanentAddress.fax}
-                onChange={(e) =>
-                  handleNestedChange("permanentAddress", "fax", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-600 font-medium">
-                Mobile (मोबाईल)
+                Mobile (मोबाईल) <span className="text-red-500">*</span>
               </label>
               <input
                 value={form.permanentAddress.mobile}
@@ -289,19 +334,19 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "mobile",
-                    e.target.value
+                    e.target.value,
                   )
                 }
                 className={`w-full px-3 py-2 rounded-xl border text-sm ${
-                  errors["permanentAddress.mobile"]
-                    ? "border-red-300 focus:border-red-500"
+                  fieldError("permanentAddress", "mobile")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
                     : "border-slate-200 focus:border-blue-500"
                 }`}
                 placeholder="10 digits"
               />
-              {errors["permanentAddress.mobile"] && (
+              {fieldError("permanentAddress", "mobile") && (
                 <p className="text-xs text-red-600 mt-1">
-                  {errors["permanentAddress.mobile"]}
+                  {fieldError("permanentAddress", "mobile")}
                 </p>
               )}
             </div>
@@ -316,18 +361,18 @@ const AddressSection = memo(
                   handleNestedChange(
                     "permanentAddress",
                     "email",
-                    e.target.value
+                    e.target.value,
                   )
                 }
                 className={`w-full px-3 py-2 rounded-xl border text-sm ${
-                  errors["permanentAddress.email"]
-                    ? "border-red-300 focus:border-red-500"
+                  fieldError("permanentAddress", "email")
+                    ? "border-red-300 bg-red-50 focus:border-red-500"
                     : "border-slate-200 focus:border-blue-500"
                 }`}
               />
-              {errors["permanentAddress.email"] && (
+              {fieldError("permanentAddress", "email") && (
                 <p className="text-xs text-red-600 mt-1">
-                  {errors["permanentAddress.email"]}
+                  {fieldError("permanentAddress", "email")}
                 </p>
               )}
             </div>
@@ -335,7 +380,7 @@ const AddressSection = memo(
         </div>
       </div>
     );
-  }
+  },
 );
 
 AddressSection.displayName = "AddressSection";
@@ -349,7 +394,6 @@ AddressSection.propTypes = {
       municipality: PropTypes.string,
       district: PropTypes.string,
       province: PropTypes.string,
-      tel: PropTypes.string,
       mobile: PropTypes.string,
       email: PropTypes.string,
     }).isRequired,
@@ -360,7 +404,6 @@ AddressSection.propTypes = {
       municipality: PropTypes.string,
       district: PropTypes.string,
       province: PropTypes.string,
-      tel: PropTypes.string,
       mobile: PropTypes.string,
       email: PropTypes.string,
     }).isRequired,

@@ -1,445 +1,99 @@
-# 🏗️ HRM Profile System Architecture
+# HRM System Architecture
 
-## Component Hierarchy
+## High-Level Overview
 
-```
-Profile.jsx (Main Container)
-│
-├── ARIA Live Region (Screen Reader Announcements)
-│
-├── SuccessAnimation (Feedback)
-│
-├── DocumentPreviewModal (Document Viewer)
-│
-└── <form> (Profile Form)
-    │
-    ├── Header Section
-    │   ├── Title & Description
-    │   └── Right Side
-    │       ├── ProfileCompletenessBadge
-    │       ├── Export PDF Button
-    │       ├── Last Saved Indicator
-    │       └── Unsaved Changes Badge
-    │
-    ├── ProfileProgress (Completion Tracker)
-    │
-    ├── Validation Error Banner (Conditional)
-    │
-    ├── ProfileImageSection (memoized)
-    │
-    ├── EmployeeInfoSection (memoized)
-    │
-    ├── IdentificationSection (memoized)
-    │   └── MaskedInput fields for sensitive data
-    │
-    ├── FamilyDetailsSection (memoized)
-    │   └── Swipeable family member cards
-    │
-    ├── EducationSection (memoized)
-    │   └── Swipeable education entries
-    │
-    ├── AddressSection (memoized)
-    │   └── Copy Address Button
-    │
-    └── Form Actions
-        ├── Discard Changes Button
-        └── Save Changes Button (with loading state)
-```
+The platform is split into two applications:
 
-## Hook Dependencies
+- Frontend app in `src/` (React + Vite)
+- Backend app in `backend/app/` (FastAPI + SQLAlchemy)
 
-```
-Profile Component
-│
-├── useAuth() → User context
-├── useMockData() → Data operations
-├── useToast() → Notifications
-│
-├── useProfileForm() → Form state management
-│   ├── form state
-│   ├── handleChange
-│   ├── handleNestedChange
-│   ├── handleImageUpload
-│   └── hasUnsavedChanges
-│
-├── useValidation() → Form validation
-│   ├── validationErrors
-│   ├── validateForm
-│   ├── validateField
-│   └── clearError
-│
-├── useFamilyMembers() → Family CRUD
-│   ├── addFamilyMember
-│   ├── removeFamilyMember
-│   └── updateFamilyMember
-│
-├── useEducation() → Education CRUD
-│   ├── addEducation
-│   ├── removeEducation
-│   └── updateEducation
-│
-├── useDebounce() → Debouncing utility
-├── useUnsavedChanges() → Browser warning
-├── useAutoSave() → Auto-save logic
-│
-└── useMobileHelpers()
-    ├── useIsMobile → Device detection
-    ├── useSwipeGesture → Touch gestures
-    ├── useMobileValidation → Mobile errors
-    └── useMobileFilePicker → File upload
-```
+The frontend talks to backend REST APIs under `/api/v1/*` and consumes realtime notifications from SSE endpoints.
 
-## Data Flow
+## Frontend Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    User Interaction                       │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-                  ↓
-┌─────────────────────────────────────────────────────────┐
-│              Event Handlers (useCallback)                │
-│  handleChange, handleNestedChange, handleImageUpload     │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-                  ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Form State Update                        │
-│              setForm() → hasUnsavedChanges                │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-                  ├──────────────────────────────────────┐
-                  │                                      │
-                  ↓                                      ↓
-┌──────────────────────────────┐    ┌────────────────────────────┐
-│     useDebounce (500ms)      │    │   useAutoSave (30s)        │
-│  Debounced Form for Validation│    │  Save draft to localStorage │
-└──────────────┬───────────────┘    └────────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────────────────────┐
-│              useValidation Hook                          │
-│    Real-time validation on debounced form               │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-                  ↓
-┌─────────────────────────────────────────────────────────┐
-│           Validation Errors State                        │
-│    Update UI with error messages & counts                │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-                  ↓
-┌─────────────────────────────────────────────────────────┐
-│         ARIA Live Region Announcement                    │
-│    Screen reader announces validation status             │
-└─────────────────────────────────────────────────────────┘
-```
+### Composition
 
-## Form Submission Flow
+- App bootstrap: `src/main.jsx`
+- Routing: `src/App.jsx`
+- Shared layout: `src/layouts/MainLayout.jsx`
+- Route protection: `src/components/ProtectedRoute.jsx`
 
-```
-User clicks "Save Changes"
-         │
-         ↓
-    Form Submit Event
-         │
-         ↓
-   validateForm()
-         │
-         ├──── Invalid? ────┐
-         │                  ↓
-         │          Show Error Banner
-         │                  │
-         │                  ↓
-         │          Focus First Error Field
-         │                  │
-         │                  ↓
-         │          Announce to Screen Reader
-         │                  │
-         │                  ↓
-         │          Scroll to Error
-         │
-         ↓
-      Valid ✓
-         │
-         ↓
-   setIsSaving(true)
-         │
-         ↓
-   Show Loading Spinner
-         │
-         ↓
-   updateUserProfile()
-         │
-         ↓
-   Clear localStorage draft
-         │
-         ↓
-   setIsSaving(false)
-         │
-         ↓
-   Show Success Animation
-         │
-         ↓
-   Update lastSaved timestamp
-         │
-         ↓
-   Announce success to screen reader
-```
+### State and Context
 
-## Mobile Interaction Flow
+- Authentication: `src/context/AuthContext.jsx`
+- Toast/alerts: `src/context/ToastContext.jsx`
+- Platform settings: `src/context/PlatformSettingsContext.jsx`
 
-```
-Mobile Device Detected
-         │
-         ↓
-useIsMobile() returns true
-         │
-         ├──────────────────────────┐
-         │                          │
-         ↓                          ↓
-  Render Mobile UI         Enable Touch Gestures
-         │                          │
-         ↓                          ↓
-Touch-optimized          useSwipeGesture()
-button sizes                      │
-         │                        ↓
-         │              User swipes left/right
-         │                        │
-         │                        ↓
-         │              onSwipeLeft() triggers
-         │                        │
-         │                        ↓
-         │              Delete confirmation
-         │                        │
-         │                        ↓
-         │              Remove item from list
-         │
-         ↓
-useMobileValidation()
-         │
-         ↓
-Display errors as toast
-         │
-         ↓
-Auto-hide after 5 seconds
-```
+### Service Layer
 
-## Export PDF Flow
+- API client and interceptors: `src/services/backendApi.js`
+- Access token storage and refresh retry flow
+- Service groups: auth, users, leaves, attendance, imports, reports, notifications
 
-```
-User clicks "Export PDF"
-         │
-         ↓
-   exportProfileToPDF(user, form)
-         │
-         ↓
-   Create HTML template
-         │
-         ├─── Profile Image
-         ├─── Basic Information
-         ├─── Employment Details
-         ├─── Identification
-         ├─── Family Details (table)
-         ├─── Education (table)
-         ├─── Address Details
-         └─── Footer with timestamp
-         │
-         ↓
-   Open in new window
-         │
-         ↓
-   Trigger browser print dialog
-         │
-         ↓
-   User saves as PDF
-```
+### Main Functional Pages
 
-## Accessibility Flow
+- Workforce: `Employees`, `Departments`, `Sections`, `Roles`
+- Time and leave: `Attendance*`, `LeaveManagement`, `LeaveApprovals`, `LeaveRequest`
+- System: `Settings`, `CompanySettings`, `Notifications`, `Reports`
 
-```
-User navigates with keyboard
-         │
-         ├──────────────┬──────────────┬──────────────┐
-         │              │              │              │
-         ↓              ↓              ↓              ↓
-      Tab Key      Space/Enter     Esc Key      Arrow Keys
-         │              │              │              │
-         ↓              ↓              ↓              ↓
-   Focus next    Activate button  Close modal   Navigate
-    element                                      options
-         │              │              │              │
-         └──────────────┴──────────────┴──────────────┘
-                        │
-                        ↓
-            Focus visible indicator
-                        │
-                        ↓
-            ARIA labels announce
-                        │
-                        ↓
-            Screen reader reads
-                        │
-                        ↓
-            User understands context
-```
+## Backend Architecture
 
-## State Management
+### App Entry
 
-```
-┌────────────────────────────────────────────────────────┐
-│                   Component State                       │
-├────────────────────────────────────────────────────────┤
-│                                                        │
-│  form                    → Main form data             │
-│  hasUnsavedChanges      → Dirty flag                  │
-│  validationErrors       → Error count                 │
-│  errors                 → Error messages              │
-│  showSuccess            → Success animation           │
-│  isSaving               → Loading state               │
-│  lastSaved              → Timestamp                   │
-│  imageCropModal         → Modal visibility            │
-│  tempImage              → Temp storage                │
-│  previewDocument        → Document URL                │
-│  previewTitle           → Document name               │
-│  ariaLiveMessage        → Screen reader message       │
-│                                                        │
-└────────────────────────────────────────────────────────┘
-```
+- FastAPI startup and schema guard logic: `backend/app/main.py`
+- API router mount: `backend/app/api/v1/api.py`
 
-## localStorage Structure
+### API Modules
 
-```
-localStorage
-├── hrm_users              → All users data
-├── hrm_departments        → Departments list
-├── hrm_attendance         → Attendance records
-├── hrm_leaves             → Leave requests
-├── hrm_current_user       → Current session
-└── profile_draft_${userId} → Auto-saved draft
-    ├── data               → Form state
-    └── timestamp          → Save time
-```
+- Auth/session: `backend/app/api/v1/endpoints/auth.py`
+- Users/security settings: `backend/app/api/v1/endpoints/users.py`
+- Notifications/realtime: `backend/app/api/v1/endpoints/notifications.py`
+- Imports: `backend/app/api/v1/endpoints/imports.py`
+- Reports: `backend/app/api/v1/endpoints/reports.py`
+- Device endpoints: `backend/app/api/v1/endpoints/devices.py`
 
-## Security Layers
+### Security Model
 
-```
-Input Layer
-    │
-    ↓
-Client-side Validation
-    │
-    ├── Email format
-    ├── Phone format
-    ├── Required fields
-    └── Length checks
-    │
-    ↓
-Field Masking
-    │
-    ├── Citizenship (masked)
-    ├── PAN (masked)
-    ├── Account (masked)
-    └── Passport (masked)
-    │
-    ↓
-PropTypes Validation
-    │
-    └── Runtime type checks
-    │
-    ↓
-localStorage Encryption (future)
-    │
-    ↓
-Backend API (future)
-    │
-    ├── Server-side validation
-    ├── Authentication
-    ├── Authorization
-    └── Data sanitization
-```
+- Access token + refresh token pair
+- Token payload includes token `type` and session `sid`
+- Session-backed validation in `backend/app/core/deps.py`
+- Login attempt throttling and audit rows via auth endpoint + login attempt model
+- Password policy validation in `backend/app/core/security.py`
 
-## Performance Optimizations
+### Data Layer
 
-```
-Component Level
-    │
-    ├── React.memo() → Prevent re-renders
-    │   ├── ProfileImageSection
-    │   ├── EmployeeInfoSection
-    │   ├── IdentificationSection
-    │   ├── FamilyDetailsSection
-    │   ├── EducationSection
-    │   └── AddressSection
-    │
-    ├── useCallback() → Memoize functions
-    │   ├── handleChange
-    │   ├── handleNestedChange
-    │   ├── addFamilyMember
-    │   ├── updateFamilyMember
-    │   └── 8+ more handlers
-    │
-    └── useDebounce() → Reduce computations
-        └── Validation every 500ms
-```
+Core models in `backend/app/models/models.py` include:
 
-## File Structure
+- Identity and org: `User`, `Department`, `Section`, `Role`, `Company`
+- Time/leave: `Attendance`, `LeaveRequest`, leave-related entities
+- Security/session: `UserSession`, `AuthLoginAttempt`
+- Import audit: `ImportJob`, `ImportJobRow`
+- User preferences: `UserSettings` with notification category + digest flags
 
-```
-src/
-├── pages/
-│   └── Profile.jsx (Main container)
-│
-├── components/
-│   ├── ProfileProgress.jsx
-│   ├── SuccessAnimation.jsx
-│   ├── ProfileCompletenessBadge.jsx
-│   ├── DocumentPreviewModal.jsx
-│   └── profile/
-│       ├── ProfileImageSection.jsx
-│       ├── EmployeeInfoSection.jsx
-│       ├── IdentificationSection.jsx
-│       ├── FamilyDetailsSection.jsx
-│       ├── EducationSection.jsx
-│       └── AddressSection.jsx
-│
-├── hooks/
-│   ├── useProfileForm.js
-│   ├── useValidation.js
-│   ├── useFamilyMembers.js
-│   ├── useEducation.js
-│   ├── useDebounce.js
-│   ├── useUnsavedChanges.js
-│   ├── useAutoSave.js
-│   └── useMobileHelpers.js
-│
-├── utils/
-│   ├── maskUtils.js
-│   └── pdfExport.js
-│
-└── index.css (Print styles & sr-only)
-```
+## Realtime and Notifications
 
----
+- Notification stream endpoint: `/api/v1/notifications/stream`
+- Device live stream remains independent and unchanged
+- Preferences are category-based (`profile`, `leave`, `payroll`) plus digest settings
 
-## Key Architectural Decisions
+## Reporting Flow
 
-1. **Custom Hooks**: Separated concerns into reusable hooks
-2. **Memoization**: Optimized re-renders with React.memo and useCallback
-3. **Debouncing**: Reduced validation overhead by 80%
-4. **Accessibility**: WCAG 2.1 AA compliance built-in
-5. **Mobile-First**: Touch gestures and responsive design
-6. **Security**: Field masking for sensitive data
-7. **Modularity**: Each section is independent component
-8. **Documentation**: Comprehensive docs for maintainability
+- API endpoint computes monthly KPI and comparison aggregates
+- Frontend reports page pulls JSON summary and supports CSV/PDF export
+- CSV is generated from backend endpoint; PDF uses browser print path from frontend report view
 
-## Benefits
+## Import Flow
 
-✅ **Maintainable**: Clear separation of concerns  
-✅ **Performant**: Optimized with memoization & debouncing  
-✅ **Accessible**: Full keyboard & screen reader support  
-✅ **Secure**: Data masking & validation  
-✅ **Mobile-Ready**: Touch gestures & responsive  
-✅ **Developer-Friendly**: PropTypes & documentation  
-✅ **Testable**: Pure functions & isolated hooks  
-✅ **Production-Ready**: No errors, well-tested
+1. User uploads CSV and selects strategy
+2. Backend parses rows and validates with optional dry-run
+3. Duplicate strategy applied (`skip`, `update`, `fail`)
+4. Import job + row-level outcomes persisted
+5. Error CSV can be downloaded for failed rows
+
+## Authorization Rules (Summary)
+
+- `superadmin`: global access, tenant administration
+- `admin`/`hr`: tenant-scoped workforce and ops actions
+- `employee`: self-service visibility and request flows
+
+Payroll features are currently hidden on the frontend by product decision.

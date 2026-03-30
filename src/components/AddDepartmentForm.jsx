@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { X, Save } from "lucide-react";
-// import { useMockData } from "../context/MockData";
 import { useToast } from "../context/ToastContext";
 
 const AddDepartmentForm = ({ showModal, setShowModal }) => {
-  const { addDepartment } = useMockData();
+  const addDepartment = () => {};
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -52,10 +51,10 @@ const AddDepartmentForm = ({ showModal, setShowModal }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Department Name
+              Department Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -70,7 +69,7 @@ const AddDepartmentForm = ({ showModal, setShowModal }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Description
+              Description <span className="text-red-500">*</span>
             </label>
             <textarea
               name="description"
@@ -85,7 +84,7 @@ const AddDepartmentForm = ({ showModal, setShowModal }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Department Head
+              Department Head <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -100,7 +99,7 @@ const AddDepartmentForm = ({ showModal, setShowModal }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Contact Email
+              Contact Email <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -115,7 +114,7 @@ const AddDepartmentForm = ({ showModal, setShowModal }) => {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Contact Phone
+              Contact Phone <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
